@@ -1,9 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.database import Base, engine
+from app.models import Post, RegionalContent
+
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(
-    title="LocalHub",
-    version="1.0.0"
+    title="LocalHub API",
+    version="1.0.0",
 )
 
 app.add_middleware(
@@ -16,10 +21,10 @@ app.add_middleware(
 
 
 @app.get("/")
-def home():
+def root():
     return {"message": "LocalHub API"}
 
 
 @app.get("/health")
-def health():
+def health_check():
     return {"status": "ok"}

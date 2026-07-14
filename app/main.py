@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import contents
-
+from app.routers import posts
 from app.core.database import Base, engine
 from app.models import Post, RegionalContent
 
@@ -11,6 +11,7 @@ app = FastAPI(
     title="LocalHub API",
     version="1.0.0",
 )
+app.include_router(posts.router)
 app.include_router(contents.router)
 
 app.add_middleware(

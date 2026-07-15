@@ -1,21 +1,52 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 # 게시글 작성 요청
 class PostCreate(BaseModel):
-    title: str
-    content: str
-    password: str
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1)
+    password: str = Field(min_length=4, max_length=100)
+
+    @field_validator("title", "content")
+    @classmethod
+    def strip_and_validate_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("공백만 입력할 수 없습니다.")
+        return value
 
 
 
 # 게시글 수정 요청
 class PostUpdate(BaseModel):
-    title: str
-    content: str
-    password: str
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1)
+    password: str = Field(min_length=4, max_length=100)
+
+    @field_validator("title", "content")
+    @classmethod
+    def strip_and_validate_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("공백만 입력할 수 없습니다.")
+        return value
+
+
+# 수정 및 삭제 비밀번호 확인 요청
+class PostPasswordRequest(BaseModel):
+    password: str = Field(min_length=4, max_length=100)
+
+
+# 비밀번호 확인 응답
+class PasswordVerifyResponse(BaseModel):
+    verified: bool
+
+
+# 공통 메시지 응답
+class MessageResponse(BaseModel):
+    message: str
 
 
 

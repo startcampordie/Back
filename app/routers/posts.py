@@ -1,14 +1,17 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.post import Post
 from app.schemas.post import (
+    MessageResponse,
+    PasswordVerifyResponse,
     PostCreate,
     PostListResponse,
+    PostPasswordRequest,
     PostUpdate,
     PostResponse
 )
@@ -20,7 +23,8 @@ router = APIRouter(
 )
 @router.post(
     "",
-    response_model=PostResponse
+    response_model=PostResponse,
+    status_code=status.HTTP_201_CREATED
 )
 def create_post(
     post: PostCreate,
@@ -47,7 +51,7 @@ def get_posts(
     keyword: str | None = Query(default=None, max_length=100),
     sort: Literal["latest", "views"] = "latest",
     page: int = Query(default=1, ge=1),
-    size: Literal[10] = 10,
+    size: int = Query(default=10, ge=10, le=10),
     db: Session = Depends(get_db)
 ):
     query = db.query(Post)
@@ -121,7 +125,7 @@ def get_post(
     if not post:
         raise HTTPException(
             status_code=404,
-            detail="게시글 없음"
+            detail="게시글을 찾을 수 없습니다."
         )
 
 
@@ -151,14 +155,14 @@ def update_post(
     if not post:
         raise HTTPException(
             status_code=404,
-            detail="게시글 없음"
+            detail="게시글을 찾을 수 없습니다."
         )
 
 
     if post.password != request.password:
         raise HTTPException(
-            status_code=400,
-            detail="비밀번호 불일치"
+            status_code=403,
+            detail="비밀번호가 일치하지 않습니다."
         )
 
 
@@ -171,10 +175,45 @@ def update_post(
 
 
     return post
-@router.delete("/{post_id}")
+
+
+@router.post(
+    "/{post_id}/verify-password",
+    response_model=PasswordVerifyResponse
+)
+def verify_post_password(
+    post_id: int,
+    request: PostPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    post = (
+        db.query(Post)
+        .filter(Post.id == post_id)
+        .first()
+    )
+
+    if not post:
+        raise HTTPException(
+            status_code=404,
+            detail="게시글을 찾을 수 없습니다."
+        )
+
+    if post.password != request.password:
+        raise HTTPException(
+            status_code=403,
+            detail="비밀번호가 일치하지 않습니다."
+        )
+
+    return {"verified": True}
+
+
+@router.delete(
+    "/{post_id}",
+    response_model=MessageResponse
+)
 def delete_post(
     post_id: int,
-    password: str,
+    request: PostPasswordRequest,
     db: Session = Depends(get_db)
 ):
 
@@ -188,14 +227,14 @@ def delete_post(
     if not post:
         raise HTTPException(
             status_code=404,
-            detail="게시글 없음"
+            detail="게시글을 찾을 수 없습니다."
         )
 
 
-    if post.password != password:
+    if post.password != request.password:
         raise HTTPException(
-            status_code=400,
-            detail="비밀번호 불일치"
+            status_code=403,
+            detail="비밀번호가 일치하지 않습니다."
         )
 
 
@@ -204,5 +243,5 @@ def delete_post(
 
 
     return {
-        "message":"삭제 완료"
+        "message": "게시글이 삭제되었습니다."
     }

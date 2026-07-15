@@ -1,30 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import contents
-from app.routers import posts
+
 from app.core.database import Base, engine
-from app.models import Post, RegionalContent
-from app.routers import contents, home, posts
-from app.routers import contents, home, posts, search
-from app.routers import chat
-from app.models import ChatSession, ChatMessage
+from app.models import (
+    ChatMessage,
+    ChatSession,
+    Post,
+    RegionalContent,
+)
+from app.routers import chat, contents, home, posts, search
+
 
 Base.metadata.create_all(bind=engine)
+
 
 app = FastAPI(
     title="LocalHub API",
     version="1.0.0",
 )
-app.include_router(posts.router)
-app.include_router(contents.router)
-app.include_router(contents.router)
-app.include_router(posts.router)
-app.include_router(home.router)
-app.include_router(contents.router)
-app.include_router(posts.router)
-app.include_router(home.router)
-app.include_router(search.router)
-app.include_router(chat.router)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +27,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(posts.router)
+app.include_router(contents.router)
+app.include_router(home.router)
+app.include_router(search.router)
+app.include_router(chat.router)
 
 
 @app.get("/")

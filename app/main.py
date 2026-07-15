@@ -6,6 +6,8 @@ from app.core.database import Base, engine
 from app.models import Post, RegionalContent
 from app.routers import contents, home, posts
 from app.routers import contents, home, posts, search
+from app.routers import chat
+from app.models import ChatSession, ChatMessage
 
 Base.metadata.create_all(bind=engine)
 
@@ -22,6 +24,7 @@ app.include_router(contents.router)
 app.include_router(posts.router)
 app.include_router(home.router)
 app.include_router(search.router)
+app.include_router(chat.router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -27,6 +27,9 @@ from app.services.search_service import (
 
 logger = logging.getLogger(__name__)
 
+DB_SEARCH_LIMIT = 10
+OPENAI_CONTEXT_LIMIT = 10
+RESPONSE_REFERENCE_LIMIT = 5
 
 CATEGORY_KEYWORDS = {
     "관광지": [
@@ -256,69 +259,48 @@ def search_posts(
         .all()
     )
 
+def select_results_by_ids(
+    results,
+    selected_ids: list[int],
+    limit: int = RESPONSE_REFERENCE_LIMIT,
+):
+    """
+    OpenAI가 선택한 ID를 서버 검색 결과와 대조합니다.
 
-# def make_regional_answer(
-#     message: str,
-#     contents: list[RegionalContent],
-# ) -> str:
-#     if not contents:
-#         return (
-#             "조건에 맞는 지역 정보를 찾지 못했습니다. "
-#             "지역명이나 장소 이름을 바꿔서 질문해 주세요."
-#         )
+    - 검색 후보에 없는 ID 제거
+    - 중복 ID 제거
+    - OpenAI가 선택한 순서 유지
+    - 최대 5건 제한
+    """
 
-#     category = detect_category(message)
-#     district = detect_district(message)
+    result_map = {
+        result.id: result
+        for result in results
+    }
 
-#     condition_parts = []
+    selected_results = []
+    seen_ids = set()
 
-#     if district:
-#         condition_parts.append(district)
+    for selected_id in selected_ids:
+        if selected_id in seen_ids:
+            continue
 
-#     if category:
-#         condition_parts.append(category)
+        result = result_map.get(selected_id)
 
-#     condition = " ".join(condition_parts)
+        if result is None:
+            logger.warning(
+                "OpenAI가 검색 후보에 없는 ID를 선택함: %s",
+                selected_id,
+            )
+            continue
 
-#     if condition:
-#         introduction = (
-#             f"{condition} 검색 결과를 알려드릴게요."
-#         )
-#     else:
-#         introduction = "관련 지역 정보를 알려드릴게요."
+        seen_ids.add(selected_id)
+        selected_results.append(result)
 
-#     item_lines = []
+        if len(selected_results) >= limit:
+            break
 
-#     for index, content in enumerate(contents, start=1):
-#         address = content.address or "주소 정보 없음"
-
-#         item_lines.append(
-#             f"{index}. {content.title} - {address}"
-#         )
-
-#     return introduction + "\n" + "\n".join(item_lines)
-
-
-# def make_post_answer(posts: list[Post]) -> str:
-#     if not posts:
-#         return (
-#             "관련된 커뮤니티 게시글을 찾지 못했습니다. "
-#             "다른 검색어로 질문해 주세요."
-#         )
-
-#     item_lines = []
-
-#     for index, post in enumerate(posts, start=1):
-#         item_lines.append(
-#             f"{index}. {post.title} "
-#             f"(조회수 {post.view_count})"
-#         )
-
-#     return (
-#         "관련 커뮤니티 게시글을 찾았습니다.\n"
-#         + "\n".join(item_lines)
-#     )
-
+    return selected_results
 
 def save_message(
     db: Session,
@@ -338,6 +320,56 @@ def save_message(
 
     return message
 
+def select_recommended_results(
+    results,
+    recommendations,
+    limit: int = RESPONSE_REFERENCE_LIMIT,
+):
+    """
+    AI가 선택한 ID를 서버 검색 결과와 대조합니다.
+
+    반환값:
+    - selected_results: 검증된 DB 객체
+    - reasons_by_id: ID별 AI 선택 이유
+    """
+
+    result_map = {
+        result.id: result
+        for result in results
+    }
+
+    selected_results = []
+    reasons_by_id = {}
+    seen_ids = set()
+
+    for recommendation in recommendations:
+        selected_id = recommendation.id
+
+        if selected_id in seen_ids:
+            continue
+
+        result = result_map.get(selected_id)
+
+        if result is None:
+            logger.warning(
+                "OpenAI가 검색 후보에 없는 ID를 선택함: %s",
+                selected_id,
+            )
+            continue
+
+        reason = recommendation.reason.strip()
+
+        if not reason:
+            continue
+
+        seen_ids.add(selected_id)
+        selected_results.append(result)
+        reasons_by_id[selected_id] = reason
+
+        if len(selected_results) >= limit:
+            break
+
+    return selected_results, reasons_by_id
 
 def process_chat(
     db: Session,
@@ -354,15 +386,16 @@ def process_chat(
         intent=intent,
     )
 
-    # 2. 검색 대상에 따라 DB 검색
+    # 2. DB 검색
     if intent == "community_post":
         total, results = search_posts(
             db=db,
             message=message,
         )
 
-        context = make_post_context(results)
-        references = make_post_references(results)
+        candidates = results[:OPENAI_CONTEXT_LIMIT]
+        context = make_post_context(candidates)
+        reference_builder = make_post_references
 
     else:
         total, results = search_regional_contents(
@@ -371,25 +404,64 @@ def process_chat(
             message=message,
         )
 
-        context = make_regional_context(results)
-        references = make_content_references(results)
+        candidates = results[:OPENAI_CONTEXT_LIMIT]
+        context = make_regional_context(candidates)
+        reference_builder = make_content_references
 
-    # 3. 검색 결과가 없다면 OpenAI를 호출하지 않음
-    if not results:
+    # OpenAI 실패 시 사용할 기본 검색 결과
+    selected_results = candidates[
+        :RESPONSE_REFERENCE_LIMIT
+    ]
+    reasons_by_id = {}
+
+    # 3. 검색 결과가 없으면 OpenAI 호출 생략
+    if not candidates:
         answer = make_fallback_answer(
             intent=intent,
             total=total,
-            results=results,
+            results=candidates,
         )
 
     else:
-        # 4. 검색 결과가 있을 때만 OpenAI 호출
         try:
-            answer = generate_ai_answer(
+            # 4. 구조화된 OpenAI 응답 생성
+            ai_result = generate_ai_answer(
                 intent=intent,
-                message=message,
-                context=context,
+                question=message,
+                regional_context=context,
             )
+
+            (
+                ai_selected_results,
+                ai_reasons_by_id,
+            ) = select_recommended_results(
+                results=candidates,
+                recommendations=(
+                    ai_result.recommendations
+                ),
+            )
+
+            # 5. 유효한 추천 항목이 있을 때만 AI 응답 사용
+            if ai_selected_results:
+                answer = ai_result.answer
+                selected_results = (
+                    ai_selected_results
+                )
+                reasons_by_id = (
+                    ai_reasons_by_id
+                )
+
+            else:
+                logger.warning(
+                    "OpenAI가 유효한 검색 결과를 "
+                    "선택하지 않았습니다."
+                )
+
+                answer = make_fallback_answer(
+                    intent=intent,
+                    total=total,
+                    results=candidates,
+                )
 
         except Exception:
             logger.exception(
@@ -399,10 +471,16 @@ def process_chat(
             answer = make_fallback_answer(
                 intent=intent,
                 total=total,
-                results=results,
+                results=candidates,
             )
 
-    # 5. 챗봇 답변 저장
+    # 6. 장소 정보와 AI 선택 이유 결합
+    references = reference_builder(
+        selected_results,
+        reasons_by_id,
+    )
+
+    # 7. 챗봇 답변 저장
     assistant_message = save_message(
         db=db,
         session_id=session.session_id,
@@ -411,27 +489,33 @@ def process_chat(
         intent=intent,
     )
 
-    # 6. 세션 만료 시각을 마지막 대화 기준 7일 연장
+    # 8. 세션 만료일 연장
     extend_session(session)
 
     db.commit()
     db.refresh(assistant_message)
 
-    # 7. API 응답
+    # 9. API 응답
     return {
         "session_id": session.session_id,
         "intent": intent,
         "answer": answer,
         "total": total,
         "references": references,
-        "created_at": assistant_message.created_at,
+        "created_at": (
+            assistant_message.created_at
+        ),
     }
 
-def make_content_references(contents) -> list[dict]:
+def make_content_references(
+    contents,
+    reasons_by_id: dict[int, str] | None = None,
+) -> list[dict]:
     """
-    지역 정보는 ID, 이름, 카테고리, 주소만
-    프론트에 반환합니다.
+    지역 정보와 해당 ID의 AI 선택 이유를 반환합니다.
     """
+
+    reasons_by_id = reasons_by_id or {}
 
     return [
         {
@@ -440,17 +524,30 @@ def make_content_references(contents) -> list[dict]:
             "title": content.title,
             "category": content.category,
             "address": content.address,
-            "telephone": None,
+            "telephone": content.telephone,
+            "image_url": content.image_url,
+            "image_thumbnail_url": (
+                content.image_thumbnail_url
+            ),
+            "reason": reasons_by_id.get(
+                content.id
+            ),
             "view_count": None,
         }
-        for content in contents
+        for content in contents[
+            :RESPONSE_REFERENCE_LIMIT
+        ]
     ]
 
-def make_post_references(posts) -> list[dict]:
+def make_post_references(
+    posts,
+    reasons_by_id: dict[int, str] | None = None,
+) -> list[dict]:
     """
-    게시글 본문은 반환하지 않습니다.
-    프론트는 ID를 이용해 상세 페이지로 이동합니다.
+    게시글과 해당 ID의 AI 선택 이유를 반환합니다.
     """
+
+    reasons_by_id = reasons_by_id or {}
 
     return [
         {
@@ -460,11 +557,17 @@ def make_post_references(posts) -> list[dict]:
             "category": None,
             "address": None,
             "telephone": None,
+            "image_url": None,
+            "image_thumbnail_url": None,
+            "reason": reasons_by_id.get(
+                post.id
+            ),
             "view_count": post.view_count,
         }
-        for post in posts
+        for post in posts[
+            :RESPONSE_REFERENCE_LIMIT
+        ]
     ]
-
 
 def make_fallback_answer(
     intent: str,

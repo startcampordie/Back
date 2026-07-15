@@ -31,3 +31,23 @@ class PostResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# 게시글 목록 항목 응답
+class PostListItem(BaseModel):
+    id: int
+    title: str
+    view_count: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# 게시글 목록 및 페이지 정보 응답
+class PostListResponse(BaseModel):
+    page: int
+    size: int
+    total: int
+    total_pages: int
+    items: list[PostListItem]

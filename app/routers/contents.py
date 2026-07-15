@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.regional_content import RegionalContent
+from app.models.regional_content_tag import RegionalContentTag
 from app.schemas.content import ContentListResponse
 
 
@@ -80,7 +81,9 @@ def get_contents(
 
         if normalized_tag:
             query = query.filter(
-                RegionalContent.tag == normalized_tag
+                RegionalContent.tags.any(
+                    RegionalContentTag.tag == normalized_tag
+                )
             )
         else:
             tag = None

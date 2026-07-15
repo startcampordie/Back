@@ -1,9 +1,13 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Float, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.regional_content_tag import RegionalContentTag
 
 
 class RegionalContent(Base):
@@ -101,4 +105,11 @@ class RegionalContent(Base):
         DateTime,
         default=datetime.now,
         nullable=False,
+    )
+
+    tags: Mapped[list["RegionalContentTag"]] = relationship(
+        back_populates="regional_content",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="RegionalContentTag.id",
     )

@@ -11,6 +11,13 @@
 
 ## 프로젝트 실행 방법
 
+## 최초 실행 순서
+
+1. 가상환경 생성
+2. 패키지 설치
+3. 서버 실행 (`python -m uvicorn app.main:app --reload`)
+4. 초기 데이터 적재 (`python -m scripts.seed_data`)
+
 ### 1. 프로젝트 클론
 
 ```bash

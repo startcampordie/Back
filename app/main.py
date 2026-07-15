@@ -4,6 +4,7 @@ from app.routers import contents
 from app.routers import posts
 from app.core.database import Base, engine
 from app.models import Post, RegionalContent
+from app.routers import contents, home, posts
 
 Base.metadata.create_all(bind=engine)
 
@@ -13,6 +14,9 @@ app = FastAPI(
 )
 app.include_router(posts.router)
 app.include_router(contents.router)
+app.include_router(contents.router)
+app.include_router(posts.router)
+app.include_router(home.router)
 
 app.add_middleware(
     CORSMiddleware,

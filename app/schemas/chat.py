@@ -1,6 +1,55 @@
 from datetime import datetime
+from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+class ChatIntent(str, Enum):
+    ATTRACTION = "attraction"
+    CULTURE = "culture"
+    RESTAURANT = "restaurant"
+    FESTIVAL = "festival"
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    intent: ChatIntent
+
+    message: str = Field(
+        min_length=2,
+        max_length=100,
+        examples=["북구 관광지 추천해줘"],
+    )
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str):
+        value = value.strip()
+
+        if not value:
+            raise ValueError("질문을 입력해 주세요.")
+
+        return value
+
+
+class ChatReference(BaseModel):
+    type: str
+    id: int
+    title: str
+
+    category: str | None = None
+    address: str | None = None
+    telephone: str | None = None
+    view_count: int | None = None
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    intent: ChatIntent
+    answer: str
+    total: int
+    references: list[ChatReference]
+    created_at: datetime
 
 
 class ChatSessionResponse(BaseModel):
@@ -10,32 +59,6 @@ class ChatSessionResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class ChatRequest(BaseModel):
-    session_id: str
-    message: str = Field(
-        min_length=1,
-        max_length=500,
-        examples=["북구에 있는 관광지 추천해줘"],
-    )
-
-
-class ChatReference(BaseModel):
-    type: str
-    id: int
-    title: str
-    category: str | None = None
-    address: str | None = None
-    telephone: str | None = None
-
-
-class ChatResponse(BaseModel):
-    session_id: str
-    intent: str
-    answer: str
-    references: list[ChatReference]
-    created_at: datetime
 
 
 class ChatMessageResponse(BaseModel):

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -91,7 +93,7 @@ def chat(
             detail="채팅 세션을 찾을 수 없습니다.",
         )
 
-    if is_session_expired(session):
+    if session.expires_at < datetime.now():
         raise HTTPException(
             status_code=410,
             detail="만료된 채팅 세션입니다.",
@@ -100,5 +102,6 @@ def chat(
     return process_chat(
         db=db,
         session=session,
-        user_message=request.message,
+        intent=request.intent.value,
+        message=request.message,
     )

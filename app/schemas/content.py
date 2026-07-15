@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ContentResponse(BaseModel):
@@ -9,13 +9,19 @@ class ContentResponse(BaseModel):
     address: str | None
     image_url: str | None
 
-    class Config:
-        from_attributes = True
-
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ContentListResponse(BaseModel):
+    category: str
+    selected_tag: str | None
+    keyword: str | None
+
     page: int
     size: int
-    total: int
+    total_elements: int
+    total_pages: int
+    has_previous: bool
+    has_next: bool
+
     items: list[ContentResponse]

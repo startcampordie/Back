@@ -37,9 +37,14 @@ def get_contents(
             "RESTAURANT, FESTIVAL"
         ),
     ),
-    tag: str | None = Query(
-        default=None,
-        description="추천 태그",
+    # 기존 단일 태그 요청 코드:
+    # tag: str | None = Query(
+    #     default=None,
+    #     description="추천 태그",
+    # ),
+    tags: list[str] = Query(
+        default=[],
+        description="추천 태그 목록(선택한 태그 중 하나 이상 일치)",
     ),
     keyword: str | None = Query(
         default=None,
@@ -75,18 +80,34 @@ def get_contents(
             RegionalContent.category == category
         )
 
-    # 태그 필터
-    if tag:
-        normalized_tag = tag.strip()
+    # 기존 단일 태그 필터 코드:
+    # if tag:
+    #     normalized_tag = tag.strip()
+    #
+    #     if normalized_tag:
+    #         query = query.filter(
+    #             RegionalContent.tags.any(
+    #                 RegionalContentTag.tag == normalized_tag
+    #             )
+    #         )
+    #     else:
+    #         tag = None
 
-        if normalized_tag:
-            query = query.filter(
-                RegionalContent.tags.any(
-                    RegionalContentTag.tag == normalized_tag
-                )
+    # 다중 태그 OR 필터
+    # 카테고리·검색어 조건과는 AND로 결합하고,
+    # 선택된 태그끼리는 하나 이상 일치하면 조회합니다.
+    normalized_tags = list(dict.fromkeys(
+        tag.strip()
+        for tag in tags
+        if tag.strip()
+    ))
+
+    if normalized_tags:
+        query = query.filter(
+            RegionalContent.tags.any(
+                RegionalContentTag.tag.in_(normalized_tags)
             )
-        else:
-            tag = None
+        )
 
     # 장소 이름 또는 주소 검색
     if keyword:
@@ -132,7 +153,13 @@ def get_contents(
 
     return {
         "category": category,
-        "selected_tag": tag,
+        # 기존 단일 태그 응답 필드는 호환성을 위해 유지합니다.
+        "selected_tag": (
+            normalized_tags[0]
+            if len(normalized_tags) == 1
+            else None
+        ),
+        "selected_tags": normalized_tags,
         "keyword": keyword,
         "page": page,
         "size": size,

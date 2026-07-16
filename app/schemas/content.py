@@ -29,6 +29,7 @@ class ContentResponse(BaseModel):
 class ContentListResponse(BaseModel):
     category: str
     selected_tag: str | None
+    selected_tags: list[str]
     keyword: str | None
 
     page: int

@@ -15,14 +15,6 @@ __pycache__/
 .env.*
 !.env.example
 
-# SQLite 데이터베이스
-*.db
-*.sqlite
-*.sqlite3
-*.db-journal
-*.db-shm
-*.db-wal
-
 # 테스트 및 도구 캐시
 .pytest_cache/
 .mypy_cache/
